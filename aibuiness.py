@@ -51,7 +51,11 @@ def generate(req: CallRequest, x_api_key: str = Header(None)):
     system = (
         "You are an AI phone assistant calling a client on behalf of a company.\n"
         "Follow the company's instructions below.\n"
-        "Speak in short, natural sentences, as if talking on the phone.\n"
+                "Speak in short, natural sentences, as if talking on the phone.\n"
+        "Write ONLY the exact words to be spoken aloud: no titles, no markdown, "
+        "no stage directions, no emojis, no brackets.\n"
+        "Reply in the language of the company's instructions. For Tunisian Arabic, write "
+        "Arabic script and keep French and English words in Latin letters.\n"
         "Answer questions only from the KNOWLEDGE section. If the answer is not "
         "there, say you will arrange a callback from a person. Never invent prices or facts.\n\n"
         f"COMPANY INSTRUCTIONS:\n{req.prompt}\n\n"
@@ -79,12 +83,37 @@ def generate(req: CallRequest, x_api_key: str = Header(None)):
     return StreamingResponse(stream(), media_type="text/plain; charset=utf-8")
 
 
+VOICES = {"youssef", "zeineb", "karim", "sarra", "anis", "rim",
+          "hamza", "mariem", "mehdi", "ines", "walid"}
+
+
+def tapra_cmd():
+    # The `tapra` command is installed with the tapra package
+    return shutil.which("tapra") or os.path.join(os.path.dirname(sys.executable), "tapra")
+
+
 @app.post("/speak")
 def speak(req: SpeakRequest, x_api_key: str = Header(None)):
     check_key(x_api_key)
-    if tapra_client is None:
-        raise HTTPException(status_code=500, detail="Tapra is not configured")
+    if not TAPRA_KEY:
+        raise HTTPException(status_code=500, detail="TAPRA_API_KEY is not set")
 
-    # TODO: confirm the exact method name with: tapra speak "..." --dry-run
-    audio = tapra_client.speech.create(text=req.text, voice=req.voice)
-    return Response(content=audio, media_type="audio/wav")
+    text = req.text.strip().lstrip("-–— ")[:1500]  # Tapra bills per character
+    if not text:
+        raise HTTPException(status_code=400, detail="No text")
+    voice = req.voice if req.voice in VOICES else "youssef"
+
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "speech.wav")
+        p = subprocess.run(
+            [tapra_cmd(), "speak", text, "--voice", voice, "-o", out, "-y"],
+            env={**os.environ, "TAPRA_API_KEY": TAPRA_KEY},
+            capture_output=True, text=True, timeout=90,
+        )
+        if p.returncode != 0 or not os.path.exists(out):
+            print("Tapra error:", p.stdout, p.stderr)
+            raise HTTPException(status_code=502, detail="Tapra failed")
+        with open(out, "rb") as f:
+            data = f.read()
+
+    return Response(content=data, media_type="audio/wav")
