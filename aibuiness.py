@@ -5,8 +5,18 @@ from pydantic import BaseModel
 from groq import Groq
 
 app = FastAPI()
-client = Groq()  # reads GROQ_API_KEY
+
 SECRET = os.environ.get("AI_SERVICE_KEY")
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+SECOND_KEY = os.environ.get("SECOND_AI_API_KEY")
+
+# First AI (Groq)
+client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+
+# Second AI: create its client here with SECOND_KEY.
+# Example for an OpenAI-compatible provider:
+# from openai import OpenAI
+# client2 = OpenAI(api_key=SECOND_KEY, base_url="https://PROVIDER-URL/v1")
 
 
 class CallRequest(BaseModel):
