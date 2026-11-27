@@ -1,4 +1,8 @@
 import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse, Response, PlainTextResponse
 from pydantic import BaseModel
@@ -13,14 +17,7 @@ TAPRA_KEY = os.environ.get("TAPRA_API_KEY")
 # AI #1: Groq writes the call script
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
-# AI #2: Tapra speaks it in Tunisian voices (optional, the service still starts without it)
-tapra_client = None
-try:
-    if TAPRA_KEY:
-        from tapra import Tapra
-        tapra_client = Tapra(api_key=TAPRA_KEY)
-except Exception as e:
-    print("Tapra not available:", e)
+
 
 
 def check_key(x_api_key):
