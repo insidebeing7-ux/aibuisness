@@ -4,9 +4,41 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from groq import Groq
 
+import httpx
+from fastapi.responses import Response
+
 app = FastAPI()
 
 SECRET = os.environ.get("AI_SERVICE_KEY")
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+TAPRA_KEY = os.environ.get("TAPRA_API_KEY")
+TAPRA_TTS_URL = os.environ.get("TAPRA_TTS_URL")  # from tapra.tn/docs
+
+client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    voice: str = "youssef"
+
+
+@app.post("/speak")
+def speak(req: SpeakRequest, x_api_key: str = Header(None)):
+    if not SECRET or x_api_key != SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not TAPRA_KEY or not TAPRA_TTS_URL:
+        raise HTTPException(status_code=500, detail="Tapra is not configured")
+
+    # Check the exact auth header and field names in tapra.tn/docs
+    r = httpx.post(
+        TAPRA_TTS_URL,
+        headers={"Authorization": f"Bearer {TAPRA_KEY}"},
+        json={"text": req.text, "voice": req.voice},
+        timeout=60,
+    )
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail="Tapra request failed")
+    return Response(content=r.content, media_type="audio/wav")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 SECOND_KEY = os.environ.get("SECOND_AI_API_KEY")
 
